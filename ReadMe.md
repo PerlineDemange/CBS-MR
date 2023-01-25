@@ -6,4 +6,4 @@ Data is available at <a href="https://www.cbs.nl/en-gb/onze-diensten/customised-
 These analyses should be reproducible as summary statistics are available online (except 23andMe EA GWAS). For the TwoSample MR package see https://mrcieu.github.io/TwoSampleMR/ 
 3. Figures 
 
-You can find the preregistration <a href="https://osf.io/vmpfg"></a> here and the preprint is upcoming. 
+You can find the preregistration <a href="https://osf.io/vmpfg">here</a> and the preprint is upcoming. 

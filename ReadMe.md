@@ -6,4 +6,4 @@ Data is available at <a href="https://www.cbs.nl/en-gb/onze-diensten/customised-
 These analyses should be reproducible as summary statistics are available online (except 23andMe EA GWAS). For the TwoSample MR package see https://mrcieu.github.io/TwoSampleMR/ 
 3. Figures 
 
-You can find the preprint <a href="https://www.medrxiv.org/content/10.1101/2023.01.26.23285029v1">here</a> . 
+You can find the preprint <a href="https://www.medrxiv.org/content/10.1101/2023.01.26.23285029v1">here</a>. 

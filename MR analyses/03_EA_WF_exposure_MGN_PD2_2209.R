@@ -11,6 +11,7 @@ library(devtools)
 #install_github("MRCIEU/TwoSampleMR")
 library(TwoSampleMR) # https://mrcieu.github.io/TwoSampleMR/index.html 
 
+setwd("C:/Users/user/Dropbox/CBS - MR/MR analyses/")
 
 # 1. Load data Exposure EA #############
 
@@ -200,7 +201,7 @@ p1 <- mr_scatter_plot(asd.results[[1]], dat.asd)
 p1[[1]]
 
 
-#* 2.2. ADHD  #################
+#* 2.2. ADHD 2018  #################
 # (for format of the file see: https://docs.google.com/document/d/1TWIhr8-qpCXB13WCXcU1_HDio8lC_MeWoAg2jlggrtU/edit )
 adhd <- fread("../Summary_statistics/ADHD/daner_adhd_meta_filtered_NA_iPSYCH23_PGC11_sigPCs_woSEX_2ell6sd_EUR_Neff_70.meta.gz")
 head(adhd)
@@ -292,7 +293,7 @@ adhd.wf.results
 save(adhd.results, adhd.wf.results, file = "adhd.MR.results.2209.RData")
 load("adhd.MR.results.2209.RData")
 
-#** 2.4.5 Figures ADHD ###########
+#** 2.2.5 Figures ADHD ###########
 res_single <- mr_singlesnp(dat.adhd)
 p4 <- mr_funnel_plot(res_single)
 p4[[1]]
@@ -302,6 +303,110 @@ p1 <- mr_scatter_plot(res, dat.adhd)
 p1[[1]]
 
 res_loo <- mr_leaveoneout(dat.adhd)
+p3 <- mr_leaveoneout_plot(res_loo)
+p3[[1]]
+
+#* 2.2.bis ADHD 2023  #################
+adhd2023 <- fread("../Summary_statistics/ADHD/Demontis 2023/ADHD2022_iPSYCH_deCODE_PGC.meta.gz")
+head(adhd2023)
+
+# take log(OR) to get the beta, s.e. is already on the log(OR) scale according to description of the daner file format.
+adhd2023$beta<- log(adhd2023$OR)
+
+
+#** 2.2.1. Clump EA specifically for ADHD ######
+
+ea_meta_exp_dat_adhd2023 <- ea_meta_exp_dat[ea_meta_exp_dat$SNP %in% adhd2023$SNP,]
+
+
+ea_meta_exp_clumped_adhd2023 <- clump_data(ea_meta_exp_dat_adhd2023,
+                                       clump_kb = 1000,
+                                       clump_r2 = 0.001,
+                                       clump_p1 = 1,
+                                       clump_p2 = 1,
+                                       pop = "EUR"
+)
+
+ea_wf_exp_dat_adhd2023 <- ea_wf_exp_dat[ea_wf_exp_dat$SNP %in% adhd2023$SNP,]
+
+ea_wf_exp_dat_clumped_adhd2023 <- clump_data(ea_wf_exp_dat_adhd2023,
+                                         clump_kb = 1000, 
+                                         clump_r2 = 0.001, 
+                                         clump_p1 = 1,
+                                         clump_p2 = 1,
+                                         pop = "EUR"
+)
+
+
+
+
+#** 2.2.2 Extract SNPS for outcome and format: #################
+
+adhd2023_dat <- format_data(adhd2023, 
+                        type="outcome",
+                        snps= ea_meta_exp_clumped_adhd2023$SNP,
+                        snp_col = "SNP",
+                        beta_col = "beta",
+                        se_col = "SE",
+                        effect_allele_col = "A1",
+                        other_allele_col = "A2",
+                        eaf_col = "FRQ_A_19099",
+                        pval_col = "P",
+                        samplesize_col = "Neff")
+adhd2023_dat$outcome <- "ADHD2023"
+
+adhd2023_dat.wf <- format_data(adhd2023, 
+                           type="outcome",
+                           snps= ea_wf_exp_dat_clumped_adhd2023$SNP,
+                           snp_col = "SNP",
+                           beta_col = "beta",
+                           se_col = "SE",
+                           effect_allele_col = "A1",
+                           other_allele_col = "A2",
+                           eaf_col = "FRQ_A_19099",
+                           pval_col = "P",
+                           samplesize_col = "Neff")
+adhd2023_dat.wf$outcome <- "ADHD2023"
+
+
+rm(adhd2023)
+
+
+#** 2.2.3 Harmonize exposure and outcome data #################
+dat.adhd2023 <- harmonise_data(
+  exposure_dat = ea_meta_exp_clumped_adhd2023, 
+  outcome_dat = adhd2023_dat, action = 2
+)
+head(dat.adhd2023)
+nb.snps.adhd2023 <- nrow(dat.adhd2023)
+
+dat.adhd2023.wf <- harmonise_data(
+  exposure_dat = ea_wf_exp_dat_clumped_adhd2023, 
+  outcome_dat = adhd2023_dat.wf, action = 2
+)
+head(dat.adhd2023.wf)
+nb.snps.adhd2023.wf <- nrow(dat.adhd2023.wf)
+
+#** 2.2.4 MR analyses ADHD #############
+
+adhd2023.results <- run_MR_analyses(dat.adhd2023)
+adhd2023.results
+adhd2023.wf.results <- run_MR_analyses(dat.adhd2023.wf)
+adhd2023.wf.results
+
+save(adhd2023.results, adhd2023.wf.results, file = "adhd2023.MR.results.2209.RData")
+load("adhd2023.MR.results.2209.RData")
+
+#** 2.4.5 Figures ADHD ###########
+res_single <- mr_singlesnp(dat.adhd2023)
+p4 <- mr_funnel_plot(res_single)
+p4[[1]]
+
+res  <- mr(dat.adhd2023, method_list=c("mr_ivw", "mr_egger_regression", "mr_weighted_mode", "mr_weighted_median"))
+p1 <- mr_scatter_plot(res, dat.adhd2023) 
+p1[[1]]
+
+res_loo <- mr_leaveoneout(dat.adhd2023)
 p3 <- mr_leaveoneout_plot(res_loo)
 p3[[1]]
 
@@ -395,6 +500,7 @@ an.results <- run_MR_analyses(dat.an)
 an.wf.results <- run_MR_analyses(dat.an.wf)
 
 save(an.results, an.wf.results, file = "an.MR.results.2209.RData")
+load("an.MR.results.2209.RData")
 
 #* 2.4 Anxiety Disorder #################
 
@@ -1210,6 +1316,7 @@ load("alc.MR.results.2209.RData")
 
 all.results <- rbind(asd.results[[1]], 
                      adhd.results[[1]], 
+                     adhd2023.results[[1]],
                      an.results[[1]], 
                      anx.results[[1]], 
                      bip.results[[1]], 
@@ -1229,6 +1336,7 @@ ggplot(data= iv.all.results, aes(x=outcome, y=or))+
 
 all.wf.results <- rbind(asd.wf.results[[1]], 
                      adhd.wf.results[[1]], 
+                     adhd2023.wf.results[[1]], 
                      an.wf.results[[1]], 
                      anx.wf.results[[1]], 
                      bip.wf.results[[1]], 
@@ -1276,6 +1384,7 @@ p
 
 all.sensitivity <- rbind(asd.results[[2]], 
                          adhd.results[[2]], 
+                         adhd2023.results[[2]], 
                          an.results[[2]], 
                          anx.results[[2]], 
                          bip.results[[2]], 
@@ -1290,6 +1399,7 @@ all.sensitivity <- rbind(asd.results[[2]],
 
 all.Q <- rbind(asd.results[[3]], 
                adhd.results[[3]], 
+               adhd2023.results[[3]], 
                an.results[[3]], 
                anx.results[[3]], 
                bip.results[[3]], 
@@ -1304,6 +1414,7 @@ all.Q <- rbind(asd.results[[3]],
 
 all.wf.sensitivity <- rbind(asd.wf.results[[2]], 
                          adhd.wf.results[[2]], 
+                         adhd2023.wf.results[[2]], 
                          an.wf.results[[2]], 
                          anx.wf.results[[2]], 
                          bip.wf.results[[2]], 
@@ -1318,6 +1429,7 @@ all.wf.sensitivity <- rbind(asd.wf.results[[2]],
 
 all.wf.Q <- rbind(asd.wf.results[[3]], 
                adhd.wf.results[[3]], 
+               adhd2023.wf.results[[3]], 
                an.wf.results[[3]], 
                anx.wf.results[[3]], 
                bip.wf.results[[3]], 

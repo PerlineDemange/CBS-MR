@@ -9,9 +9,9 @@ library(data.table)
 library(tidyverse)
 #library(devtools)
 #install_github("GenomicSEM/GenomicSEM")
-require(GenomicSEM)
+library(GenomicSEM)
 
-setwd("C:/Users/user/Dropbox/CBS - MR/Summary_statistics/")
+setwd("C:/Users/user/Dropbox/CBS - MR/02_data_analysis/Summary_statistics/")
 
 # 1. Munge summary statistics #################
 
@@ -194,6 +194,15 @@ munge(files =  "Alc/pgc_alcdep.eur_discovery.aug2018_release_rsid.txt",
       N =  46568,
       info.filter = 0.9, maf.filter = 0.01)
 
+check <- fread("ADHD/Demontis 2023/ADHD2022_iPSYCH_deCODE_PGC.meta.gz")
+
+
+munge(files =  "ADHD/Demontis 2023/ADHD2022_iPSYCH_deCODE_PGC.meta.gz", 
+      hm3 = "C:/Users/user/OneDrive - Vrije Universiteit Amsterdam/Documents/References_Data/w_hm3.snplist",
+      trait.names = "ADHD_Demontis_2023",
+      N =  225534,
+      info.filter = 0.9, maf.filter = 0.01)
+
 # 2. Run LDSC to obtain matrix with LD cross trait intercept  ##################
 
 trait.file <- c("ASD_Grove.sumstats.gz",
@@ -209,7 +218,8 @@ trait.file <- c("ASD_Grove.sumstats.gz",
                 "OCD_Arnold.sumstats.gz",
                 "PTSD_Nievergelt.sumstats.gz",
                 "SCZ_PGC3.sumstats.gz",
-                "Alc_Walters.sumstats.gz"
+                "Alc_Walters.sumstats.gz",
+                "ADHD_Demontis_2023.sumstats.gz"
 )
 sample.prevs <- c(0.396582598,
                   0.23431747,
@@ -224,7 +234,8 @@ sample.prevs <- c(0.396582598,
                   0.276401028,
                   0.132898963,
                   0.417521142,
-                  0.248
+                  0.248,
+                  0.171552848
                   
 )
 pop.prevs <- c(0.012,
@@ -240,7 +251,8 @@ pop.prevs <- c(0.012,
                0.015,
                0.3,
                0.01,
-               0.159
+               0.159,
+               0.05
 )
 trait.Ids <- c("ASD_Grove",
                  "Ano_Watson",
@@ -255,7 +267,8 @@ trait.Ids <- c("ASD_Grove",
                  "OCD_Arnold",
                  "PTSD_Nievergelt",
                  "SCZ_PGC3",
-               "Alc_Walters"
+                 "Alc_Walters",
+                 "ADHD_Demontis_2023"
 )
 
 for (i in 1:length(trait.file)){ 
@@ -279,18 +292,17 @@ for (i in 1:length(trait.file)){
    ldsc(traits, sample.prev, population.prev, ld, wld, trait.names)
 }
 
-
 # 3. Get pvalues of the CTI #####
 # I got the CTI manually in the log file 
 
-cti <- fread("../cti.csv")
+cti <- fread("Cross Trait Intercepts/cti.csv")
 cti$Z <- cti$cti/cti$se
 cti
 cti$p <-2*pnorm(-abs(cti$Z))
 
 write.table(cti, "cti_pval.csv", row.names = F)
 
-cti <- fread("../cti_wf_2209.csv")
+cti <- fread("Cross Trait Intercepts/cti_wf_2209.csv")
 cti$Z <- cti$cti/cti$se
 cti
 cti$p <-2*pnorm(-abs(cti$Z))

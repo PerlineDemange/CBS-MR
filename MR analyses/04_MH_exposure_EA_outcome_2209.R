@@ -14,6 +14,7 @@ library(TwoSampleMR) # https://mrcieu.github.io/TwoSampleMR/index.html
 
 
 # Load Exposure ##################
+#can not run everything at once due to memory issues, split into several groups
 
 asd <- fread("../Summary_statistics/ASD_iPSYCH-PGC_ASD_Nov2017.gz")
 adhd <- fread("../Summary_statistics/ADHD/daner_adhd_meta_filtered_NA_iPSYCH23_PGC11_sigPCs_woSEX_2ell6sd_EUR_Neff_70.meta.gz")
@@ -27,10 +28,13 @@ ocd <- fread("../Summary_statistics/OCD/ocd_aug2017.gz")
 ptsd <- fread("../Summary_statistics/pts_eur_freeze2_overall.results")
 scz <- fread("../Summary_statistics/SCZ/PGC3_SCZ_wave3_public.v2.tsv", fill=T) 
 alc <- fread("../Summary_statistics/Alc/pgc_alcdep.eur_discovery.aug2018_release_rsid_betase.txt")
+adhd2023 <- fread("../Summary_statistics/ADHD/Demontis 2023/ADHD2022_iPSYCH_deCODE_PGC.meta.gz")
+
 
 # convert the OR to log(OR) or the beta of a logistic regression if necessary #####
 asd$beta <- log(asd$OR)
 adhd$beta<- log(adhd$OR)
+adhd2023$beta<- log(adhd2023$OR)
 #an is beta already 
 #anx is beta already 
 #bip is beta already
@@ -46,6 +50,7 @@ scz$beta <- log(scz$OR)
 # If the number of instruments after clumping is <5, we select suggestive hits instead 
 asd_instrument <- asd[asd$P <= 0.00001, ] #4028
 adhd_instrument <- adhd[adhd$P <= 0.00000005, ] #317
+adhd2023_instrument <- adhd2023[adhd2023$P <= 0.00000005, ] #1428
 an_instrument <- an[an$PVAL <= 0.00000005, ] # 327
 anx_instrument <- anx[anx$P <= 0.00001, ] 
 bip_instrument <- bip[bip$PVAL <= 0.00000005, ]#
@@ -66,6 +71,14 @@ asd_exp_dat <- format_data(asd_instrument,
                                other_allele_col = "A2",
                                pval_col = "P")
 adhd_exp_dat <- format_data(adhd_instrument, 
+                            type="exposure",   
+                            snp_col = "SNP",
+                            beta_col = "beta",
+                            se_col = "SE",
+                            effect_allele_col = "A1",
+                            other_allele_col = "A2",
+                            pval_col = "P")
+adhd2023_exp_dat <- format_data(adhd2023_instrument, 
                             type="exposure",   
                             snp_col = "SNP",
                             beta_col = "beta",
@@ -177,6 +190,7 @@ alc_exp_dat <- format_data(alc_instrument,
 )
 asd_exp_dat$exposure <- "ASD"
 adhd_exp_dat$exposure <- "ADHD"
+adhd2023_exp_dat$exposure <- "ADHD2023"
 an_exp_dat$exposure <- "ANNO"
 anx_exp_dat$exposure <- "ANX"
 bip_exp_dat$exposure <- "BIP"
@@ -203,6 +217,13 @@ adhd_exp_dat_clumped <- clump_data(adhd_exp_dat,
                                    clump_p2 = 1,
                                    pop = "EUR"
 ) #11
+adhd2023_exp_dat_clumped <- clump_data(adhd2023_exp_dat,
+                                   clump_kb = 1000, 
+                                   clump_r2 = 0.001, 
+                                   clump_p1 = 1,
+                                   clump_p2 = 1,
+                                   pop = "EUR"
+) #27
 an_exp_dat_clumped <- clump_data(an_exp_dat,
                                    clump_kb = 1000, 
                                    clump_r2 = 0.001, 
@@ -276,6 +297,7 @@ alc_exp_dat_clumped <- clump_data(alc_exp_dat,
 
 rm(asd)
 rm(adhd)
+rm(adhd2023)
 rm(an)
 rm(anx)
 rm(bip)
@@ -308,6 +330,7 @@ rm(mdd_exp_dat)
 rm(mdd_exp_dat)
 nb_snps_clumped <- c(nrow(asd_exp_dat_clumped), 
                      nrow(adhd_exp_dat_clumped), 
+                     nrow(adhd2023_exp_dat_clumped), 
                      nrow(an_exp_dat_clumped),
                      nrow(anx_exp_dat_clumped), 
                      nrow(bip_exp_dat_clumped), 
@@ -376,6 +399,25 @@ ea_meta_dat_adhd <- format_data(ea_meta,
 ea_wf_dat_adhd <- format_data(ea_wf, 
                               type="outcome",
                               snps= adhd_exp_dat_clumped$SNP,
+                              snp_col = "ID",
+                              beta_col = "Beta",
+                              se_col = "SE",
+                              effect_allele_col = "ALT",
+                              other_allele_col = "REF",
+                              pval_col = "pval")
+ea_meta_dat_adhd2023 <- format_data(ea_meta, 
+                                type="outcome",
+                                snps= adhd2023_exp_dat_clumped$SNP,
+                                snp_col = "MarkerName",
+                                beta_col = "Beta",
+                                se_col = "SE",
+                                effect_allele_col = "Allele1",
+                                other_allele_col = "Allele2",
+                                pval_col = "P-value",
+                                eaf_col = "Freq1")
+ea_wf_dat_adhd2023 <- format_data(ea_wf, 
+                              type="outcome",
+                              snps= adhd2023_exp_dat_clumped$SNP,
                               snp_col = "ID",
                               beta_col = "Beta",
                               se_col = "SE",
@@ -576,6 +618,8 @@ ea_meta_dat_asd$outcome <- "EA"
 ea_wf_dat_asd$outcome <- "EA_wf"
 ea_meta_dat_adhd$outcome <- "EA"
 ea_wf_dat_adhd$outcome <- "EA_wf"
+ea_meta_dat_adhd2023$outcome <- "EA"
+ea_wf_dat_adhd2023$outcome <- "EA_wf"
 ea_meta_dat_an$outcome <- "EA"
 ea_wf_dat_an$outcome <- "EA_wf"
 ea_meta_dat_anx$outcome <- "EA"
@@ -599,6 +643,7 @@ ea_wf_dat_alc$outcome <- "EA_wf"
 # get number of snps missing from ea 
 nb_snp_shared_ea <- c(nrow(ea_meta_dat_asd), 
                       nrow(ea_meta_dat_adhd),
+                      nrow(ea_meta_dat_adhd2023),
                       nrow(ea_meta_dat_an), 
                       nrow(ea_meta_dat_anx), 
                       nrow(ea_meta_dat_bip), 
@@ -607,9 +652,11 @@ nb_snp_shared_ea <- c(nrow(ea_meta_dat_asd),
                       nrow(ea_meta_dat_mdd), 
                       nrow(ea_meta_dat_ocd), 
                       nrow(ea_meta_dat_ptsd), 
-                      nrow(ea_meta_dat_scz))
+                      nrow(ea_meta_dat_scz), 
+                      nrow(ea_meta_dat_alc))
 nb_snp_shared_ea_wf <- c(nrow(ea_wf_dat_asd), 
                       nrow(ea_wf_dat_adhd),
+                      nrow(ea_wf_dat_adhd2023),
                       nrow(ea_wf_dat_an), 
                       nrow(ea_wf_dat_anx), 
                       nrow(ea_wf_dat_bip), 
@@ -621,8 +668,10 @@ nb_snp_shared_ea_wf <- c(nrow(ea_wf_dat_asd),
                       nrow(ea_wf_dat_scz), 
                       nrow(ea_wf_dat_alc))
 
-nrow(ea_meta_dat_alc) #24
 
+
+rm(ea_meta)
+rm(ea_wf)
 
 # Harmonise SNPS ######
 dat.asd <- harmonise_data(
@@ -642,6 +691,14 @@ dat.adhd <- harmonise_data(
 dat.adhd.wf <- harmonise_data(
   exposure_dat = adhd_exp_dat_clumped, 
   outcome_dat = ea_wf_dat_adhd, action = 2
+)
+dat.adhd2023 <- harmonise_data(
+  exposure_dat = adhd2023_exp_dat_clumped, 
+  outcome_dat = ea_meta_dat_adhd2023, action = 2
+)
+dat.adhd2023.wf <- harmonise_data(
+  exposure_dat = adhd2023_exp_dat_clumped, 
+  outcome_dat = ea_wf_dat_adhd2023, action = 2
 )
 dat.an <- harmonise_data(
   exposure_dat = an_exp_dat_clumped, 
@@ -729,44 +786,60 @@ dat.alc.wf <- harmonise_data(
 
 asd.results <- run_MR_analyses(dat.asd)
 asd.results.wf <- run_MR_analyses(dat.asd.wf)
+save(asd.results, asd.results.wf, file = "asd.MRMHEA.results.RData")
 
 adhd.results <- run_MR_analyses(dat.adhd)
 adhd.results.wf <- run_MR_analyses(dat.adhd.wf)
+save(adhd.results, adhd.results.wf, file = "adhd.MRMHEA.results.RData")
+
+adhd2023.results <- run_MR_analyses(dat.adhd2023)
+adhd2023.results.wf <- run_MR_analyses(dat.adhd2023.wf)
+save(adhd2023.results, adhd2023.results.wf, file = "adhd2023.MRMHEA.results.RData")
 
 an.results <- run_MR_analyses(dat.an)
 an.results.wf <- run_MR_analyses(dat.an.wf)
-
+save(an.results, an.results.wf, file = "an.MRMHEA.results.RData")
 
 anx.results <- run_MR_analyses(dat.anx)
 anx.results.wf <- run_MR_analyses(dat.anx.wf)
+save(anx.results, anx.results.wf, file = "anx.MRMHEA.results.RData")
 
 bip.results <- run_MR_analyses(dat.bip)
 bip.results.wf <- run_MR_analyses(dat.bip.wf)
+save(bip.results, bip.results.wf, file = "bip.MRMHEA.results.RData")
 
 bip1.results <- run_MR_analyses(dat.bip1)
 bip1.results.wf <- run_MR_analyses(dat.bip1.wf)
+save(bip1.results, bip1.results.wf, file = "bip1.MRMHEA.results.RData")
 
 bip2.results <- run_MR_analyses(dat.bip2)
 bip2.results.wf <- run_MR_analyses(dat.bip2.wf)
+save(bip2.results, bip2.results.wf, file = "bip2.MRMHEA.results.RData")
 
 mdd.results <- run_MR_analyses(dat.mdd)
 mdd.results.wf <- run_MR_analyses(dat.mdd.wf)
+save(mdd.results, mdd.results.wf, file = "mdd.MRMHEA.results.RData")
 
 ocd.results <- run_MR_analyses(dat.ocd)
 ocd.results.wf <- run_MR_analyses(dat.ocd.wf)
+save(ocd.results, ocd.results.wf, file = "ocd.MRMHEA.results.RData")
 
 ptsd.results <- run_MR_analyses(dat.ptsd)
 ptsd.results.wf <- run_MR_analyses(dat.ptsd.wf)
+save(ptsd.results, ptsd.results.wf, file = "ptsd.MRMHEA.results.RData")
 
 scz.results <- run_MR_analyses(dat.scz)
 scz.results.wf <- run_MR_analyses(dat.scz.wf)
+save(scz.results, scz.results.wf, file = "scz.MRMHEA.results.RData")
 
 alc.results <- run_MR_analyses(dat.alc)
 alc.results.wf <- run_MR_analyses(dat.alc.wf)
+save(alc.results, alc.results.wf, file = "alc.MRMHEA.results.RData")
 
 
 all.results <- rbind(asd.results[[1]], 
                      adhd.results[[1]], 
+                     adhd2023.results[[1]], 
                      an.results[[1]], 
                      anx.results[[1]], 
                      bip.results[[1]], 
@@ -780,6 +853,7 @@ all.results <- rbind(asd.results[[1]],
 )
 all.wf.results <- rbind(asd.results.wf[[1]], 
                         adhd.results.wf[[1]], 
+                        adhd2023.results.wf[[1]], 
                         an.results.wf[[1]], 
                         anx.results.wf[[1]], 
                         bip.results.wf[[1]], 
@@ -794,6 +868,7 @@ all.wf.results <- rbind(asd.results.wf[[1]],
 )
 all.sensitivity <- rbind(asd.results[[2]], 
                          adhd.results[[2]], 
+                         adhd2023.results[[2]], 
                          an.results[[2]], 
                          anx.results[[2]], 
                          bip.results[[2]], 
@@ -807,7 +882,8 @@ all.sensitivity <- rbind(asd.results[[2]],
 )
 
 all.Q <- rbind(asd.results[[3]], 
-               adhd.results[[3]], 
+               adhd.results[[3]],
+               adhd2023.results[[3]], 
                an.results[[3]], 
                anx.results[[3]], 
                bip.results[[3]], 
@@ -821,6 +897,7 @@ all.Q <- rbind(asd.results[[3]],
 )
 all.wf.sensitivity <- rbind(asd.results.wf[[2]], 
                             adhd.results.wf[[2]], 
+                            adhd2023.results.wf[[2]], 
                             an.results.wf[[2]], 
                             anx.results.wf[[2]], 
                             bip.results.wf[[2]], 
@@ -835,6 +912,7 @@ all.wf.sensitivity <- rbind(asd.results.wf[[2]],
 
 all.wf.Q <- rbind(asd.results.wf[[3]], 
                   adhd.results.wf[[3]], 
+                  adhd2023.results.wf[[3]],
                   an.results.wf[[3]], 
                   anx.results.wf[[3]], 
                   bip.results.wf[[3]], 

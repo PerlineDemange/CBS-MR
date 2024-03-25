@@ -4,7 +4,7 @@
 #
 
 # Compare education of siblings of patients ####
-sib_EA_alldata <- fread("sib_EA_diagnoses_20210221.csv")
+sib_EA_alldata <- fread("sib_EA_diagnoses_20230920.csv")
 head(sib_EA_alldata)
 
 # 1. Identify no diagnoses families ####
@@ -15,7 +15,7 @@ no_diagnoses <- sib_EA_alldata[which(!sib_EA_alldata$FID %in% family_of_any_FID)
 
 # 2. Create a loop to run analyses over all diagnoses ##########
 ## 2.1 Set up the loop ##############
-codefile <- as.data.frame(fread("H:/Data/Diagnoses/Diagnoses_code_preregistered.csv", header=T))
+codefile <- as.data.frame(fread("H:/Data/Diagnoses/Diagnoses_code_preregistered_autism.csv", header=T))
 trait_list <- codefile$trait
 
 sample_size_total <- c("No_disorder", nrow(no_diagnoses), NA, NA,NA)
@@ -170,7 +170,8 @@ colnames(sample_size_total) <- c("Diagnoses",
 full_results <- cbind(descriptives_total, summary_ttest[,-1], sample_size_total[,-1]) 
 
 # save
-write.csv(full_results, "comparison_family_members_results.csv", row.names=F)
+write.csv(full_results, "comparison_family_members_results_20231013.csv", row.names=F)
+write.xlsx(full_results, "comparison_family_members_results_20231013.xlsx")
 
 
 ## 2.4  Plot mean of each groups ########

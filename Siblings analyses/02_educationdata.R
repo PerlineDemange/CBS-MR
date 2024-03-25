@@ -158,6 +158,8 @@ edu_pop <- fread("gba6585_edu_subset_20210219.csv")
 descriptive_edu <- fread("descriptive_table_edu_allpop_20220729.csv")
 descriptive_edu
 
+descriptive_edu_output <- descriptive_edu[,!c(1,6)]
+write.xlsx(descriptive_edu, "descriptive_table_edu_allpop_20220729.xlsx", row.names = F)
 
 # 7. Create subset with same-sex siblings ############
 edu_sib <- fread("sib_edu_subset_20210219.csv")

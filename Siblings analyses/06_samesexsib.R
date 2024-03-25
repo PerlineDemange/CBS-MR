@@ -7,13 +7,13 @@
 # *Diagnoses* #############
 # This part is adapted from script 03 
 
-codefile <- as.data.frame(fread("H:/Data/Diagnoses/Diagnoses_code_preregistered.csv", header=T))
+codefile <- as.data.frame(fread("H:/Data/Diagnoses/Diagnoses_code_preregistered_autism.csv", header=T))
 trait_list <-  c(codefile$trait, "Any")
 
 # 1. Descriptives #####################
 ## Women ############
 ### 1.1 prevalence in female sibling pop with EA ---------
-gba_allyears_full_diagnosis <- fread("gba6585_diagnoses_allyears_full_diagnosis_20210219.csv")
+gba_allyears_full_diagnosis <- fread("gba6585_diagnoses_allyears_full_diagnosis_20230703.csv")
 load("edu_sib_women_220310.Rda")
 sib_EA_women <- edu_sib_women
 rm(edu_sib_women)
@@ -29,7 +29,7 @@ nrow(sib_EA_women_allyears_full_diagnosis)/6 #good
 diagnoses_totalyears_per_person_sib_EA_women <- get_diagnoses_totalyear_per_person(
   sib_EA_women_allyears_full_diagnosis, 
   "siblings_EA")
-#write.csv(diagnoses_totalyears_per_person_sib_EA_women, "siblings_women_EA_diagnoses_totalyear_per_person_20220314.csv", row.names = F)
+#write.csv(diagnoses_totalyears_per_person_sib_EA_women, "siblings_women_EA_diagnoses_totalyear_per_person_20231108.csv", row.names = F)
 
 ### 1.3 Get descriptive table of diagnoses --------
 descriptive_table_sib_EA_women <- get_descriptive_table(sib_EA_women_allyears_full_diagnosis, 
@@ -55,8 +55,8 @@ nrow(sib_EA_men_allyears_full_diagnosis)/6 #good
 diagnoses_totalyears_per_person_sib_EA_men <- get_diagnoses_totalyear_per_person(
   sib_EA_men_allyears_full_diagnosis,
   "siblings_EA")
-#write.csv(diagnoses_totalyears_per_person_sib_EA_men,"siblings_men_EA_diagnoses_totalyear_per_person_20220314.csv", row.names = F)
-diagnoses_totalyears_per_person_sib_EA_men <- fread("siblings_men_EA_diagnoses_totalyear_per_person_20220314.csv")
+write.csv(diagnoses_totalyears_per_person_sib_EA_men,"siblings_men_EA_diagnoses_totalyear_per_person_20231108.csv", row.names = F)
+#diagnoses_totalyears_per_person_sib_EA_men <- fread("siblings_men_EA_diagnoses_totalyear_per_person_20220314.csv")
 
 ### 1.3 Get descriptive table of diagnoses --------
 descriptive_table_sib_EA_men <- get_descriptive_table(sib_EA_men_allyears_full_diagnosis,
@@ -70,11 +70,11 @@ descriptive_table <- rbind(descriptive_table_sib_EA_women,
                            descriptive_table_sib_EA_men)
 descriptive_table
 write.csv2(descriptive_table, 
-          "descriptive_table_diagnoses_allpop_samesex_20220830.csv", 
+          "descriptive_table_diagnoses_allpop_samesex_20231108.csv", 
           row.names = F, quote=F)
-descriptive_table_cl <- fread("descriptive_table_diagnoses_allpop_samesex_20220830.csv") #this solves issues with numbers being characters quickly
+descriptive_table_cl <- fread("descriptive_table_diagnoses_allpop_samesex_20231108.csv") #this solves issues with numbers being characters quickly
 write.csv2(descriptive_table_cl, 
-           "descriptive_table_diagnoses_allpop_samesex_20220830_reformat.csv", 
+           "descriptive_table_diagnoses_allpop_samesex_20231108.csv", 
            row.names = F, quote=F)
 
 # make it output safe 
@@ -90,8 +90,9 @@ descriptive_table_cl[descriptive_table_cl$population == "siblings_EA_men",]$Buli
 descriptive_table_cl[descriptive_table_cl$population == "siblings_EA_men" & descriptive_table_cl$year == 2016,]$Eating<- NA
 
 write.csv2(descriptive_table_cl, 
-           "descriptive_table_diagnoses_allpop_samesex_20220830_clean.csv", 
+           "descriptive_table_diagnoses_allpop_samesex_20231108_clean.csv", 
            row.names = F, quote=F)
+write.xlsx(descriptive_table_cl, "descriptive_table_diagnoses_allpop_samesex_20231108_clean.xlsx", row.names = F)
 
 
 # 2. Analyses ###################
@@ -118,10 +119,26 @@ for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
            OR.SE = sqrt(OR^2 * var.diag))
   results_trait$df <- model$df.residual
   results_trait$trait <- paste(trait)
+  robust <- coeftest(model, 
+                     vcov = vcovCL, # CL is clustered errors, seems to be what we need here (other options are HC)
+                     type = "HC0", cluster = sib_EA_women_alldata$FID) # HC1 is used for lm (degree of freedom based correction), HC0 is used for anything else
+  results_trait_robust <- as.data.frame(robust[,])
+  results_trait_robust <- results_trait_robust %>%
+    mutate(OR = exp(Estimate), 
+           var.diag= results_trait_robust[,2]* results_trait_robust[,2],  #diag(vcov(model)) is equivalent to (SE)^2 
+           OR.SE = sqrt(OR^2 * var.diag))
+  results_trait <- cbind(results_trait, results_trait_robust)
   results <- rbind(results, results_trait)
 } 
-colnames(results) <- c("variable", "estimate", "SE", "z_value", "p_value","OR", 
-                       "var.diag", "OR.SE", "df", "trait")
+
+colnames(results) <-c("variable", 
+                                  "estimate", "SE", "z_value",
+                                  "p_value","OR", "var.diag", "OR.SE",
+                                  "df", "trait", 
+                                  "estimate_robust", "SE_robust", "z_value_robust",
+                                  "p_value_robust","OR_robust", "var.diag_robust", "OR.SE_robust"
+)
+
 
 
 ### 2.2 Within-sibling analyses #########
@@ -149,17 +166,34 @@ for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
            OR.SE = sqrt(OR^2 * var.diag))
   results_trait$df <- model1$df.residual
   results_trait$trait <- paste(trait)
+  robust <- coeftest(model1, 
+                     vcov = vcovCL, # CL is clustered errors, seems to be what we need here (other options are HC)
+                     type = "HC0", cluster = final$FID) # HC1 is used for lm (degree of freedom based correction), HC0 is used for anything else
+  results_trait_robust <- as.data.frame(robust[,])
+  results_trait_robust <- results_trait_robust %>%
+    mutate(OR = exp(Estimate), 
+           var.diag= results_trait_robust[,2]* results_trait_robust[,2],  #diag(vcov(model)) is equivalent to (SE)^2 
+           OR.SE = sqrt(OR^2 * var.diag))
+  results_trait <- cbind(results_trait, results_trait_robust)
   results_within <- rbind(results_within, results_trait)
 } 
 
-colnames(results_within) <- c("variable", "estimate", "SE", "z_value", "p_value",
-                              "OR", "var.diag", "OR.SE","df", "trait")
+head(results_within)
+
+colnames(results_within) <- c("variable", 
+                              "estimate", "SE", "z_value",
+                              "p_value","OR", "var.diag", "OR.SE",
+                              "df", "trait", 
+                              "estimate_robust", "SE_robust", "z_value_robust",
+                              "p_value_robust","OR_robust", "var.diag_robust", "OR.SE_robust"
+)
+
 
 results$model <- "population"
 results_within$model <- "sib_comparison"
 
 results_all <- rbind(results, results_within)
-write.csv(results_all, "glm_sib_EA_women_results_20220314.csv")
+write.csv(results_all, "glm_sib_EA_women_results_20231108.csv")
 
 ## Men ####
 
@@ -182,10 +216,26 @@ for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
            OR.SE = sqrt(OR^2 * var.diag))
   results_trait$df <- model$df.residual
   results_trait$trait <- paste(trait)
+  robust <- coeftest(model, 
+                     vcov = vcovCL, # CL is clustered errors, seems to be what we need here (other options are HC)
+                     type = "HC0", cluster = sib_EA_men_alldata$FID) # HC1 is used for lm (degree of freedom based correction), HC0 is used for anything else
+  results_trait_robust <- as.data.frame(robust[,])
+  results_trait_robust <- results_trait_robust %>%
+    mutate(OR = exp(Estimate), 
+           var.diag= results_trait_robust[,2]* results_trait_robust[,2],  #diag(vcov(model)) is equivalent to (SE)^2 
+           OR.SE = sqrt(OR^2 * var.diag))
+  results_trait <- cbind(results_trait, results_trait_robust)
   results <- rbind(results, results_trait)
 } 
-colnames(results) <- c("variable", "estimate", "SE", "z_value", "p_value","OR", 
-                       "var.diag", "OR.SE", "df", "trait")
+colnames(results) <-c("variable", 
+                      "estimate", "SE", "z_value",
+                      "p_value","OR", "var.diag", "OR.SE",
+                      "df", "trait", 
+                      "estimate_robust", "SE_robust", "z_value_robust",
+                      "p_value_robust","OR_robust", "var.diag_robust", "OR.SE_robust"
+)
+
+
 
 
 
@@ -214,36 +264,48 @@ for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
            OR.SE = sqrt(OR^2 * var.diag))
   results_trait$df <- model1$df.residual
   results_trait$trait <- paste(trait)
+  robust <- coeftest(model1, 
+                     vcov = vcovCL, # CL is clustered errors, seems to be what we need here (other options are HC)
+                     type = "HC0", cluster = final$FID) # HC1 is used for lm (degree of freedom based correction), HC0 is used for anything else
+  results_trait_robust <- as.data.frame(robust[,])
+  results_trait_robust <- results_trait_robust %>%
+    mutate(OR = exp(Estimate), 
+           var.diag= results_trait_robust[,2]* results_trait_robust[,2],  #diag(vcov(model)) is equivalent to (SE)^2 
+           OR.SE = sqrt(OR^2 * var.diag))
+  results_trait <- cbind(results_trait, results_trait_robust)
   results_within <- rbind(results_within, results_trait)
 } 
 
-colnames(results_within) <- c("variable", "estimate", "SE", "z_value", "p_value",
-                              "OR", "var.diag", "OR.SE","df", "trait")
+colnames(results_within) <- c("variable", 
+                              "estimate", "SE", "z_value",
+                              "p_value","OR", "var.diag", "OR.SE",
+                              "df", "trait", 
+                              "estimate_robust", "SE_robust", "z_value_robust",
+                              "p_value_robust","OR_robust", "var.diag_robust", "OR.SE_robust"
+)
+
 
 results$model <- "population"
 results_within$model <- "sib_comparison"
 
 results_all <- rbind(results, results_within)
-write.csv(results_all, "glm_sib_EA_men_results_20220314.csv")
+write.csv(results_all, "glm_sib_EA_men_results_20231108.csv")
 
 ## Save ####
 # save again as excel file? row,anmes = false and "false? 
-write.csv(results_women, "glm_sib_EA_women_results_20220721.csv", 
-          row.names=F, quote =F )
-library("xlsx")
-write.xlsx(results_women, "glm_sib_EA_women_results_20220721.xlsx", 
+results_women<- fread("glm_sib_EA_women_results_20231108.csv")
+write.xlsx(results_women, "glm_sib_EA_women_results_20231108.xlsx", 
            row.names=F)
 
-write.csv(results_men, "glm_sib_EA_men_results_20220721.csv", 
-          row.names=F, quote =F )
-write.xlsx(results_men, "glm_sib_EA_men_results_20220721.xlsx", 
+
+write.xlsx(results_men, "glm_sib_EA_men_results_20231108.xlsx", 
            row.names=F)
 
 #3. Figure diagnoses same sex ######
-results_women <-fread("glm_sib_EA_women_results_20220314.csv", drop=1)
+results_women <-fread("glm_sib_EA_women_results_20231108.csv", drop=1)
 results_women$sex <- "women"
 results_women$OR <- as.numeric(results_women$OR)
-results_men <-fread("glm_sib_EA_men_results_20220314.csv", drop=1)
+results_men <-fread("glm_sib_EA_men_results_20231108.csv", drop=1)
 results_men$sex <- "men"
 results_all <- rbind(results_women, results_men)
 

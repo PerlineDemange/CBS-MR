@@ -8,7 +8,7 @@
 # including sex and year of birth and birthorder as covariates 
 
 ## 1.1 Finalise sibling with EA data subset #############
-diagnoses_totalyears_per_person_sib_EA <- fread("siblings_EA_diagnoses_totalyear_per_person_20210219.csv") 
+diagnoses_totalyears_per_person_sib_EA <- fread("siblings_EA_diagnoses_totalyear_per_person_20230920.csv") 
 sib_EA <- fread("sib_edu_subset_20210219.csv")
 
 head(diagnoses_totalyears_per_person_sib_EA)
@@ -16,14 +16,27 @@ head(sib_EA)
 
 sib_EA_alldata <- merge(diagnoses_totalyears_per_person_sib_EA, sib_EA, by= "RINPERSOON")
 
-#write.csv(sib_EA_alldata, "sib_EA_diagnoses_20210221.csv", row.names=F)
-sib_EA_alldata <- fread("sib_EA_diagnoses_20210221.csv")
+write.csv(sib_EA_alldata, "sib_EA_diagnoses_20230920.csv", row.names=F)
+#sib_EA_alldata <- fread("sib_EA_diagnoses_20230920.csv")
+rm(diagnoses_totalyears_per_person_sib_EA)
+rm(sib_EA)
 
 ## 1.2 Analyses ##########
 
-codefile <- as.data.frame(fread("H:/Data/Diagnoses/Diagnoses_code_preregistered.csv", header=T))
+codefile <- as.data.frame(fread("H:/Data/Diagnoses/Diagnoses_code_preregistered_autism.csv", header=T))
 trait_list <- codefile$trait
 trait_list <- c(trait_list, "Any")
+
+
+# fixest might be a possibility if the current option does not work. # Michel is doing some simulations to confirm, might not work when between within because colinearity
+# library(fixest)
+# modelfixest <- feglm( MDD ~ yrs + GBAGESLACHT + GBAGEBOORTEJAAR + birth_order | FID, 
+# family = binomial,
+# data = sib_EA_alldata, 
+# vcov = "cluster")
+# summary(modelfixest)
+
+#see https://evalf21.classes.andrewheiss.com/example/standard-errors/ 
 
 results <- NULL
 for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
@@ -36,23 +49,40 @@ for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
   results_trait <- rownames_to_column(results_trait, "Variables")
   results_trait <- results_trait %>%
     mutate(OR = exp(Estimate), 
-           var.diag= diag(vcov(model)),
+           var.diag= diag(vcov(model)),  
            OR.SE = sqrt(OR^2 * var.diag))
   results_trait$df <- model$df.residual
   results_trait$trait <- paste(trait)
+  robust <- coeftest(model, 
+                     vcov = vcovCL, # CL is clustered errors, seems to be what we need here (other options are HC)
+                     type = "HC0", cluster = sib_EA_alldata$FID) # HC1 is used for lm (degree of freedom based correction), HC0 is used for anything else
+  results_trait_robust <- as.data.frame(robust[,])
+  results_trait_robust <- results_trait_robust %>%
+    mutate(OR = exp(Estimate), 
+           var.diag= results_trait_robust[,2]* results_trait_robust[,2],  #diag(vcov(model)) is equivalent to (SE)^2 
+           OR.SE = sqrt(OR^2 * var.diag))
+  results_trait <- cbind(results_trait, results_trait_robust)
   results <- rbind(results, results_trait)
 } 
-colnames(results) <- c("variable", "estimate", "SE", "z_value", "p_value","OR", 
-                       "var.diag", "OR.SE", "df", "trait")
+colnames(results) <- c("variable", 
+                       "estimate", "SE", "z_value",
+                       "p_value","OR", "var.diag", "OR.SE",
+                       "df", "trait", 
+                       "estimate_robust", "SE_robust", "z_value_robust",
+                       "p_value_robust","OR_robust", "var.diag_robust", "OR.SE_robust"
+                       )
 
-
+write.csv(results, "glm_pop_sib_EA_results_20230921.csv")
 #write.csv(results, "glm_pop_sib_EA_results_2021024.csv")
 
-ggplot(data=results[results$variable == "yrs",], aes(x=trait, y=estimate))+
+ggplot(data=results[results$variable == "yrs",], aes(x=trait, y=OR_robust))+
   geom_bar(stat="identity") + 
-  geom_errorbar(aes(x=trait, ymin=estimate-SE*1.96, ymax=estimate+SE*1.96))
+  geom_errorbar(aes(x=trait, ymin=OR_robust-OR.SE_robust*1.96, ymax=OR_robust+OR.SE_robust*1.96))
 
- 
+ggplot(data=results[results$variable == "yrs",], aes(x=trait, y=OR))+
+  geom_bar(stat="identity") + 
+  geom_errorbar(aes(x=trait, ymin=OR-OR.SE*1.96, ymax=OR+OR.SE*1.96)) 
+
 # 2. Within sibling regression ####################
 
 # ## 2.1 Get ICC for EA ###################
@@ -79,9 +109,10 @@ final <- merge(sib_EA_alldata, mean_of_sib_EA, by = "FID")
 
 final$EA_within <- final$yrs - final$EA_between
 
-#write.csv(final, "final_within_between_data_20210222.csv", row.names=F)
-final <- fread("final_within_between_data_20210222.csv")
+#write.csv(final, "final_within_between_data_20230922.csv", row.names=F)
+#final <- fread("final_within_between_data_20210222.csv")
 
+rm(mean_of_sib_EA)
 
 ## 2.2 Loop analyses ##################
 results_within <- NULL
@@ -99,46 +130,55 @@ for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
            OR.SE = sqrt(OR^2 * var.diag))
   results_trait$df <- model1$df.residual
   results_trait$trait <- paste(trait)
+  robust <- coeftest(model1, 
+                     vcov = vcovCL, # CL is clustered errors, seems to be what we need here (other options are HC)
+                     type = "HC0", cluster = final$FID) # HC1 is used for lm (degree of freedom based correction), HC0 is used for anything else
+  results_trait_robust <- as.data.frame(robust[,])
+  results_trait_robust <- results_trait_robust %>%
+    mutate(OR = exp(Estimate), 
+           var.diag= results_trait_robust[,2]* results_trait_robust[,2],  #diag(vcov(model)) is equivalent to (SE)^2 
+           OR.SE = sqrt(OR^2 * var.diag))
+  results_trait <- cbind(results_trait, results_trait_robust)
   results_within <- rbind(results_within, results_trait)
 } 
 
-# Warning messages:
-#   1: In doTryCatch(return(expr), name, parentenv, handler) :
-#   restarting interrupted promise evaluation
-# 2: In doTryCatch(return(expr), name, parentenv, handler) :
-#   restarting interrupted promise evaluation
-# 3: In doTryCatch(return(expr), name, parentenv, handler) :
-#   restarting interrupted promise evaluation
-
 head(results_within)
-colnames(results_within) <- c("variable", "estimate", "SE", "z_value", "p_value",
-                              "OR", "var.diag", "OR.SE","df", "trait")
+
+colnames(results_within) <- c("variable", 
+                       "estimate", "SE", "z_value",
+                       "p_value","OR", "var.diag", "OR.SE",
+                       "df", "trait", 
+                       "estimate_robust", "SE_robust", "z_value_robust",
+                       "p_value_robust","OR_robust", "var.diag_robust", "OR.SE_robust"
+)
 
 results$model <- "population"
 results_within$model <- "sib_comparison"
 
 results_all <- rbind(results, results_within)
-#write.csv(results_all, "glm_sib_EA_results_20210224.csv")
-
+#write.csv(results_all, "glm_sib_EA_results_20230922.csv")
+results_all <- fread("glm_sib_EA_results_20230922.csv")
+write.xlsx(results_all, "glm_sib_EA_results_20230922.xlsx", row.names = F)
 
 
 # 3. Figures ##### 
-results_all <- fread("glm_sib_EA_results_20210224.csv")
-results_all$OR <- as.numeric(results_all$OR)
+#results_all <- fread("glm_sib_EA_results_20210224.csv")
+results_all$OR_robust <- as.numeric(results_all$OR_robust)
 results_plot <- results_all[which(results_all$variable == "yrs" | results_all$variable == "EA_within" | results_all$variable == "EA_between"),]
-ggplot(data=results_plot, aes(x=trait, y=estimate, fill=variable))+
-  geom_bar(stat="identity", position="dodge") + 
-  geom_errorbar(aes(x=trait, ymin=estimate-SE*1.96, ymax=estimate+SE*1.96), position="dodge")
-
 
 ggplot(data=results_plot, aes(x=trait, y=OR, fill=variable))+
   geom_bar(stat="identity", position="dodge")  +
   geom_errorbar(aes(x=trait, ymin=OR-OR.SE*1.96, ymax=OR+OR.SE*1.96), position="dodge")
+ggplot(data=results_plot, aes(x=trait, y=OR_robust, fill=variable))+
+  geom_bar(stat="identity", position="dodge")  +
+  geom_errorbar(aes(x=trait, ymin=OR_robust-OR.SE_robust*1.96, ymax=OR_robust+OR.SE_robust*1.96), position="dodge")
 
 results_plot2 <- results_all[which(results_all$variable == "EA_within" | results_all$variable == "EA_between"),]
 dotCOLS= c("#a6d8f0", "#f9b282")
 barCOLS= c("#008fd5", "#de6b35")
-p <- ggplot(results_plot2, aes(x=trait, y=OR, ymin=OR-OR.SE*1.96, ymax=OR+OR.SE*1.96, col= variable, fill=variable)) +
+p <- ggplot(results_plot2, aes(x=trait, y=OR_robust, ymin=OR_robust-OR.SE_robust*1.96,
+                               ymax=OR_robust+OR.SE_robust*1.96,
+                               col= variable, fill=variable)) +
   geom_linerange(size= 5, position=position_dodge(width=0.5))+ 
   geom_hline( yintercept=1, lty=2)+
   geom_point(size=3, shape=21, colour="white", stroke=0.5, position=position_dodge(width=0.5)) +
@@ -188,8 +228,8 @@ final_exc <- merge(sib_EA_alldata_exc, mean_of_sib_EA_exc, by = "FID")
 
 final_exc$EA_within <- final_exc$yrs - final_exc$EA_between
 
-write.csv(final_exc, "final_within_between_data_excl11_20220715.csv", row.names=F)
-
+#write.csv(final_exc, "final_within_between_data_excl11_20220715.csv", row.names=F)
+rm(mean_of_sib_EA_exc)
 
 results_within_exc <- NULL
 for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
@@ -206,11 +246,27 @@ for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
            OR.SE = sqrt(OR^2 * var.diag))
   results_trait$df <- model1$df.residual
   results_trait$trait <- paste(trait)
+  robust <- coeftest(model1, 
+                     vcov = vcovCL, # CL is clustered errors, seems to be what we need here (other options are HC)
+                     type = "HC0", cluster = final_exc$FID) # HC1 is used for lm (degree of freedom based correction), HC0 is used for anything else
+  results_trait_robust <- as.data.frame(robust[,])
+  results_trait_robust <- results_trait_robust %>%
+    mutate(OR = exp(Estimate), 
+           var.diag= results_trait_robust[,2]* results_trait_robust[,2],  #diag(vcov(model)) is equivalent to (SE)^2 
+           OR.SE = sqrt(OR^2 * var.diag))
+  results_trait <- cbind(results_trait, results_trait_robust)
   results_within_exc <- rbind(results_within_exc, results_trait)
 } 
 
 results_within_exc
-colnames(results_within_exc) <- c("variable", "estimate", "SE", "z_value", "p_value","OR", "var.diag", "OR.SE","df", "trait")
+
+colnames(results_within_exc) <- c("variable", 
+                              "estimate", "SE", "z_value",
+                              "p_value","OR", "var.diag", "OR.SE",
+                              "df", "trait", 
+                              "estimate_robust", "SE_robust", "z_value_robust",
+                              "p_value_robust","OR_robust", "var.diag_robust", "OR.SE_robust"
+)
 
 
 
@@ -229,18 +285,34 @@ for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
            OR.SE = sqrt(OR^2 * var.diag))
   results_trait$df <- model$df.residual
   results_trait$trait <- paste(trait)
+  robust <- coeftest(model, 
+                     vcov = vcovCL, # CL is clustered errors, seems to be what we need here (other options are HC)
+                     type = "HC0", cluster = final_exc$FID) # HC1 is used for lm (degree of freedom based correction), HC0 is used for anything else
+  results_trait_robust <- as.data.frame(robust[,])
+  results_trait_robust <- results_trait_robust %>%
+    mutate(OR = exp(Estimate), 
+           var.diag= results_trait_robust[,2]* results_trait_robust[,2],  #diag(vcov(model)) is equivalent to (SE)^2 
+           OR.SE = sqrt(OR^2 * var.diag))
+  results_trait <- cbind(results_trait, results_trait_robust)
   results <- rbind(results, results_trait)
 } 
-colnames(results) <- c("variable", "estimate", "SE", "z_value", "p_value","OR", 
-                       "var.diag", "OR.SE", "df", "trait")
 
+colnames(results) <- c("variable", 
+                              "estimate", "SE", "z_value",
+                              "p_value","OR", "var.diag", "OR.SE",
+                              "df", "trait", 
+                              "estimate_robust", "SE_robust", "z_value_robust",
+                              "p_value_robust","OR_robust", "var.diag_robust", "OR.SE_robust"
+)
 
 
 results$model <- "population"
 results_within_exc$model <- "sib_comparison"
 
 results_all_exc <- rbind(results, results_within_exc)
-write.csv(results_all_exc, "glm_sib_EA_results_excl11_20220715.csv")
+write.csv(results_all_exc, "glm_sib_EA_results_excl11_20230922.csv")
+results_all_exc <- fread("glm_sib_EA_results_excl11_20230922.csv")
+write.xlsx(results_all_exc, "glm_sib_EA_results_excl11_20230922.xlsx", row.names = F)
 
 
 #graph
@@ -281,8 +353,8 @@ final_exc2 <- merge(sib_EA_alldata_exc2, mean_of_sib_EA_exc2, by = "FID")
 
 final_exc2$EA_within <- final_exc2$yrs - final_exc2$EA_between
 
-write.csv(final_exc2, "final_within_between_data_excl2_20220715.csv", row.names=F)
-
+#write.csv(final_exc2, "final_within_between_data_excl2_20220715.csv", row.names=F)
+rm(mean_of_sib_EA_exc2)
 
 results_within_exc2 <- NULL
 for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
@@ -299,11 +371,26 @@ for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
            OR.SE = sqrt(OR^2 * var.diag))
   results_trait$df <- model1$df.residual
   results_trait$trait <- paste(trait)
+  robust <- coeftest(model1, 
+                     vcov = vcovCL, # CL is clustered errors, seems to be what we need here (other options are HC)
+                     type = "HC0", cluster = final_exc2$FID) # HC1 is used for lm (degree of freedom based correction), HC0 is used for anything else
+  results_trait_robust <- as.data.frame(robust[,])
+  results_trait_robust <- results_trait_robust %>%
+    mutate(OR = exp(Estimate), 
+           var.diag= results_trait_robust[,2]* results_trait_robust[,2],  #diag(vcov(model)) is equivalent to (SE)^2 
+           OR.SE = sqrt(OR^2 * var.diag))
+  results_trait <- cbind(results_trait, results_trait_robust)
   results_within_exc2 <- rbind(results_within_exc2, results_trait)
 } 
 
 results_within_exc2
-colnames(results_within_exc2) <- c("variable", "estimate", "SE", "z_value", "p_value","OR", "var.diag", "OR.SE","df", "trait")
+colnames(results_within_exc2) <-c("variable", 
+                                  "estimate", "SE", "z_value",
+                                  "p_value","OR", "var.diag", "OR.SE",
+                                  "df", "trait", 
+                                  "estimate_robust", "SE_robust", "z_value_robust",
+                                  "p_value_robust","OR_robust", "var.diag_robust", "OR.SE_robust"
+)
 
 
 
@@ -322,10 +409,24 @@ for(x in 1:(nrow(codefile)+1)){ #for each trait + Any
            OR.SE = sqrt(OR^2 * var.diag))
   results_trait$df <- model$df.residual
   results_trait$trait <- paste(trait)
+  robust <- coeftest(model, 
+                     vcov = vcovCL, # CL is clustered errors, seems to be what we need here (other options are HC)
+                     type = "HC0", cluster = final_exc2$FID) # HC1 is used for lm (degree of freedom based correction), HC0 is used for anything else
+  results_trait_robust <- as.data.frame(robust[,])
+  results_trait_robust <- results_trait_robust %>%
+    mutate(OR = exp(Estimate), 
+           var.diag= results_trait_robust[,2]* results_trait_robust[,2],  #diag(vcov(model)) is equivalent to (SE)^2 
+           OR.SE = sqrt(OR^2 * var.diag))
+  results_trait <- cbind(results_trait, results_trait_robust)
   results2 <- rbind(results2, results_trait)
 } 
-colnames(results2) <- c("variable", "estimate", "SE", "z_value", "p_value","OR", 
-                       "var.diag", "OR.SE", "df", "trait")
+colnames(results2) <- c("variable", 
+                        "estimate", "SE", "z_value",
+                        "p_value","OR", "var.diag", "OR.SE",
+                        "df", "trait", 
+                        "estimate_robust", "SE_robust", "z_value_robust",
+                        "p_value_robust","OR_robust", "var.diag_robust", "OR.SE_robust"
+)
 
 
 
@@ -333,7 +434,9 @@ results2$model <- "population"
 results_within_exc2$model <- "sib_comparison"
 
 results_all_exc2 <- rbind(results2, results_within_exc2)
-write.csv(results_all_exc2, "glm_sib_EA_results_excl2_20220715.csv", row.names=F)
+write.csv(results_all_exc2, "glm_sib_EA_results_excl2_20230922.csv", row.names=F)
+results_all_exc2 <- fread("glm_sib_EA_results_excl2_20230922.csv")
+write.xlsx(results_all_exc2, "glm_sib_EA_results_excl2_20230922.xlsx", row.names = F)
 
 
 #graph

@@ -44,9 +44,6 @@ write.xlsx(results_all, "lm_costs_results_20220722.xlsx",
 
 # 3. Analyses Mixed models ####################
 
-summary(lmer(cost_mean_log ~ EA_within + EA_between + 
-               GBAGESLACHT + GBAGEBOORTEJAAR + birth_order +(1|FID),
-             data = data_cost_sib))
 
 modelwithin  <- lmer(cost_mean_log ~ EA_within + EA_between + 
                      GBAGESLACHT + GBAGEBOORTEJAAR + birth_order +(1|FID),
